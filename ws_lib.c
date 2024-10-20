@@ -306,9 +306,36 @@ int ws_recv(ws_ctx* ctx, char* buffer, size_t buffer_size) {
 
 int ws_close(ws_ctx* ctx) {
     if (ctx->state == WS_STATE_OPEN) {
-        uint8_t close_frame[] = {0x88, 0x00};
-        send(ctx->socket, (char*)close_frame, 2, 0);
+        // Send close frame
+        uint8_t close_frame[] = {0x88, 0x02, 0x03, 0xE8}; // Status code 1000 (normal closure)
+        int sent = send(ctx->socket, (char*)close_frame, sizeof(close_frame), 0);
+        if (sent != sizeof(close_frame)) {
+            printf("Failed to send close frame\n");
+            return -1;
+        }
         ctx->state = WS_STATE_CLOSING;
+        
+        // Wait for the server's close frame (with a timeout)
+        char buffer[1024];
+        int recv_result;
+        struct timeval tv;
+        tv.tv_sec = 5;  // 5 seconds timeout
+        tv.tv_usec = 0;
+        setsockopt(ctx->socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+        
+        do {
+            recv_result = recv(ctx->socket, buffer, sizeof(buffer), 0);
+            if (recv_result > 0) {
+                if ((buffer[0] & 0x0F) == 0x8) {
+                    printf("Received close frame from server\n");
+                    break;
+                }
+            }
+        } while (recv_result > 0);
+
+        if (recv_result <= 0) {
+            printf("Timeout or error while waiting for server's close frame\n");
+        }
     }
     
     closesocket(ctx->socket);

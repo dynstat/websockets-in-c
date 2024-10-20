@@ -3,6 +3,11 @@
 #include <string.h>
 #include <windows.h>
 
+// ANSI color codes
+#define ANSI_COLOR_GREEN  "\x1b[32m"
+#define ANSI_COLOR_YELLOW "\x1b[33m"
+#define ANSI_COLOR_RESET  "\x1b[0m"
+
 int main() {
     if (ws_init() != 0) {
         printf("WebSocket initialization failed.\n");
@@ -26,37 +31,83 @@ int main() {
 
     printf("WebSocket connected.\n");
 
-    const char* message = "Hello, WebSocket!";
-    printf("Sending message: %s\n", message);
-    if (ws_send(ctx, message, strlen(message), WS_OPCODE_TEXT) != 0) {
-        printf("Failed to send message.\n");
-    } else {
-        printf("Message sent successfully.\n");
-    }
-
     char recv_buffer[1024];
     int recv_len;
 
-    printf("Waiting for response...\n");
-    for (int i = 0; i < 10; i++) {
-        recv_len = ws_recv(ctx, recv_buffer, sizeof(recv_buffer));
-        if (recv_len > 0) {
-            printf("Received: %.*s\n", recv_len, recv_buffer);
-            break;
-        } else if (recv_len == 0) {
-            printf("No data received, retrying...\n");
-            Sleep(100); // Wait a bit before trying again
-        } else {
-            printf("Error receiving data.\n");
-            break;
-        }
+    // First message
+    const char* message1 = "Hello, WebSocket!";
+    printf("Sending message 1: ");
+    printf(ANSI_COLOR_YELLOW "%s\n" ANSI_COLOR_RESET, message1);
+    if (ws_send(ctx, message1, strlen(message1), WS_OPCODE_TEXT) != 0) {
+        printf("Failed to send message 1.\n");
+        goto cleanup;
+    }
+    printf("Message 1 sent successfully.\n");
+
+    // Receive echo of first message
+    printf("Waiting for echo of message 1...\n");
+    recv_len = ws_recv(ctx, recv_buffer, sizeof(recv_buffer));
+    if (recv_len > 0) {
+        printf("Received echo: ");
+        printf(ANSI_COLOR_GREEN "%.*s\n" ANSI_COLOR_RESET, recv_len, recv_buffer);
+    } else {
+        printf("Error receiving echo of message 1.\n");
+        goto cleanup;
     }
 
+    // Receive additional message from server
+    printf("Waiting for additional message from server...\n");
+    recv_len = ws_recv(ctx, recv_buffer, sizeof(recv_buffer));
+    if (recv_len > 0) {
+        printf("Received additional message: ");
+        printf(ANSI_COLOR_GREEN "%.*s\n" ANSI_COLOR_RESET, recv_len, recv_buffer);
+    } else {
+        printf("Error receiving additional message.\n");
+        goto cleanup;
+    }
+
+    // Second message
+    const char* message2 = "Thank you, server!";
+    printf("Sending message 2: ");
+    printf(ANSI_COLOR_YELLOW "%s\n" ANSI_COLOR_RESET, message2);
+    if (ws_send(ctx, message2, strlen(message2), WS_OPCODE_TEXT) != 0) {
+        printf("Failed to send message 2.\n");
+        goto cleanup;
+    }
+    printf("Message 2 sent successfully.\n");
+
+    // Receive final response from server
+    printf("Waiting for final response from server...\n");
+    recv_len = ws_recv(ctx, recv_buffer, sizeof(recv_buffer));
+    if (recv_len > 0) {
+        printf("Received final response: ");
+        // The format specifier %.*s is used for printing a string with a specified length
+        // %.*s means:
+        // %s - print a string
+        // .* - the precision (length) is specified as an argument
+        // recv_len - specifies the number of characters to print from recv_buffer
+        printf(ANSI_COLOR_GREEN "%.*s\n" ANSI_COLOR_RESET, recv_len, recv_buffer);
+    } else {
+        printf("Error receiving final response.\n");
+        goto cleanup;
+    }
+
+    // Add a small delay before closing the connection
+    printf("Waiting before closing...\n");
+    Sleep(1000); // Wait for 1 second
+
+cleanup:
     printf("Closing WebSocket connection...\n");
-    ws_close(ctx);
+    int close_result = ws_close(ctx);
+    if (close_result == 0) {
+        printf("WebSocket connection closed successfully.\n");
+    } else {
+        printf("Error closing WebSocket connection.\n");
+    }
+
     ws_destroy_ctx(ctx);
     ws_cleanup();
 
-    printf("WebSocket connection closed.\n");
+    printf("WebSocket cleanup completed.\n");
     return 0;
 }
