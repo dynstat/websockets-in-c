@@ -221,23 +221,28 @@ int ws_send(ws_ctx* ctx, const char* data, size_t length, int opcode) {
     memcpy(header + header_size, &mask, 4);
     header_size += 4;
 
-    // Send frame header
-    if (send(ctx->socket, (char*)header, header_size, 0) != header_size) {
-        return -1;
-    }
+    // Allocate buffer for entire frame (header + masked payload)
+    size_t frame_size = header_size + length;
+    uint8_t* frame = (uint8_t*)malloc(frame_size);
+    if (!frame) return -1;
 
-    // Apply mask to data and send
-    char* masked_data = malloc(length);
-    if (!masked_data) return -1;
-    
+    // Copy header to frame
+    memcpy(frame, header, header_size);
+
+    // Apply mask to data and copy to frame
     for (size_t i = 0; i < length; i++) {
-        masked_data[i] = data[i] ^ ((uint8_t*)&mask)[i % 4];
+        frame[header_size + i] = data[i] ^ ((uint8_t*)&mask)[i % 4];
     }
 
-    int result = send(ctx->socket, masked_data, length, 0);
-    free(masked_data);
+    // Debug: Print frame
+    printf("Sending frame:\n");
+    print_hex(frame, frame_size);
 
-    return (result == length) ? 0 : -1;
+    // Send entire frame
+    int result = send(ctx->socket, (char*)frame, frame_size, 0);
+    free(frame);
+
+    return (result == frame_size) ? 0 : -1;
 }
 
 int ws_recv(ws_ctx* ctx, char* buffer, size_t buffer_size) {
@@ -321,4 +326,12 @@ ws_state ws_get_state(ws_ctx* ctx) {
 int ws_service(ws_ctx* ctx) {
     // TODO: Implement ping/pong, handle incoming frames, etc.
     return 0;
+}
+
+void print_hex(const uint8_t* data, size_t length) {
+    for (size_t i = 0; i < length; i++) {
+        printf("%02X ", data[i]);
+        if ((i + 1) % 16 == 0) printf("\n");
+    }
+    printf("\n");
 }
