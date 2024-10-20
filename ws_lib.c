@@ -257,51 +257,96 @@ int ws_send(ws_ctx* ctx, const char* data, size_t length, int opcode) {
 
 int ws_recv(ws_ctx* ctx, char* buffer, size_t buffer_size) {
     if (ctx->state != WS_STATE_OPEN) {
+        printf("Error: WebSocket not in OPEN state\n");
         return -1;
     }
 
-    uint8_t header[2];
-    int bytes_received = recv(ctx->socket, (char*)header, 2, 0);
-    if (bytes_received != 2) return -1;
+    size_t total_received = 0;
+    bool final_fragment = false;
 
-    bool fin = header[0] & 0x80;
-    int opcode = header[0] & 0x0F;
-    bool masked = header[1] & 0x80;
-    uint64_t payload_length = header[1] & 0x7F;
+    while (!final_fragment && total_received < buffer_size) {
+        uint8_t header[2];
+        int bytes_received = recv(ctx->socket, (char*)header, 2, 0);
+        if (bytes_received != 2) {
+            printf("Error receiving header: %d\n", WSAGetLastError());
+            return -1;
+        }
 
-    if (payload_length == 126) {
-        uint16_t extended_length;
-        bytes_received = recv(ctx->socket, (char*)&extended_length, 2, 0);
-        if (bytes_received != 2) return -1;
-        payload_length = ntohs(extended_length);
-    } else if (payload_length == 127) {
-        uint64_t extended_length;
-        bytes_received = recv(ctx->socket, (char*)&extended_length, 8, 0);
-        if (bytes_received != 8) return -1;
-        payload_length = ntohll(extended_length);
-    }
+        final_fragment = header[0] & 0x80;
+        int opcode = header[0] & 0x0F;
+        bool masked = header[1] & 0x80;
+        uint64_t payload_length = header[1] & 0x7F;
 
-    if (payload_length > buffer_size) {
-        // Buffer too small
-        return -1;
-    }
+        printf("Frame info: final=%d, opcode=%d, masked=%d, payload_length=%llu\n", 
+               final_fragment, opcode, masked, payload_length);
 
-    uint32_t mask = 0;
-    if (masked) {
-        bytes_received = recv(ctx->socket, (char*)&mask, 4, 0);
-        if (bytes_received != 4) return -1;
-    }
+        if (payload_length == 126) {
+            uint16_t extended_length;
+            bytes_received = recv(ctx->socket, (char*)&extended_length, 2, 0);
+            if (bytes_received != 2) {
+                printf("Error receiving extended length (16-bit): %d\n", WSAGetLastError());
+                return -1;
+            }
+            payload_length = ntohs(extended_length);
+        } else if (payload_length == 127) {
+            uint64_t extended_length;
+            bytes_received = recv(ctx->socket, (char*)&extended_length, 8, 0);
+            if (bytes_received != 8) {
+                printf("Error receiving extended length (64-bit): %d\n", WSAGetLastError());
+                return -1;
+            }
+            payload_length = ntohll(extended_length);
+        }
 
-    bytes_received = recv(ctx->socket, buffer, payload_length, 0);
-    if (bytes_received != payload_length) return -1;
+        printf("Actual payload length: %llu\n", payload_length);
 
-    if (masked) {
-        for (size_t i = 0; i < payload_length; i++) {
-            buffer[i] ^= ((uint8_t*)&mask)[i % 4];
+        uint32_t mask = 0;
+        if (masked) {
+            bytes_received = recv(ctx->socket, (char*)&mask, 4, 0);
+            if (bytes_received != 4) {
+                printf("Error receiving mask: %d\n", WSAGetLastError());
+                return -1;
+            }
+        }
+
+        size_t remaining_buffer = buffer_size - total_received;
+        size_t fragment_size = (payload_length < remaining_buffer) ? payload_length : remaining_buffer;
+        size_t bytes_to_receive = fragment_size;
+
+        while (bytes_to_receive > 0) {
+            bytes_received = recv(ctx->socket, buffer + total_received, bytes_to_receive, 0);
+            if (bytes_received <= 0) {
+                printf("Error receiving payload: expected %zu, got %d\n", bytes_to_receive, bytes_received);
+                return -1;
+            }
+            total_received += bytes_received;
+            bytes_to_receive -= bytes_received;
+        }
+
+        if (masked) {
+            for (size_t i = total_received - fragment_size; i < total_received; i++) {
+                buffer[i] ^= ((uint8_t*)&mask)[i % 4];
+            }
+        }
+
+        if (fragment_size < payload_length) {
+            size_t remaining = payload_length - fragment_size;
+            char discard_buffer[1024];
+            while (remaining > 0) {
+                size_t to_discard = (remaining < sizeof(discard_buffer)) ? remaining : sizeof(discard_buffer);
+                bytes_received = recv(ctx->socket, discard_buffer, to_discard, 0);
+                if (bytes_received <= 0) {
+                    printf("Error discarding excess data: %d\n", WSAGetLastError());
+                    break;
+                }
+                remaining -= bytes_received;
+            }
+            printf("Discarded %llu bytes\n", payload_length - fragment_size);
         }
     }
 
-    return bytes_received;
+    printf("Total received: %zu bytes\n", total_received);
+    return total_received;
 }
 
 int ws_close(ws_ctx* ctx) {

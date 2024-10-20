@@ -78,19 +78,28 @@ int main() {
 
     // Receive final response from server
     printf("Waiting for final response from server...\n");
-    recv_len = ws_recv(ctx, recv_buffer, sizeof(recv_buffer));
-    if (recv_len > 0) {
-        printf("Received final response: ");
-        // The format specifier %.*s is used for printing a string with a specified length
-        // %.*s means:
-        // %s - print a string
-        // .* - the precision (length) is specified as an argument
-        // recv_len - specifies the number of characters to print from recv_buffer
-        printf(ANSI_COLOR_GREEN "%.*s\n" ANSI_COLOR_RESET, recv_len, recv_buffer);
-    } else {
-        printf("Error receiving final response.\n");
+    char* large_buffer = (char*)malloc(1000001); // Allocate 1MB + 1 byte for null terminator
+    if (large_buffer == NULL) {
+        printf("Failed to allocate memory for large buffer.\n");
         goto cleanup;
     }
+
+    recv_len = ws_recv(ctx, large_buffer, 1000000);
+    if (recv_len > 0) {
+        large_buffer[recv_len] = '\0'; // Null-terminate the string
+        printf("Received final response (length: %d): %.20s...\n", recv_len, large_buffer);
+    } else {
+        printf("Error receiving final response. recv_len = %d\n", recv_len);
+        int error = WSAGetLastError();
+        printf("WSA error code: %d\n", error);
+        char error_msg[256];
+        FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                      NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                      error_msg, sizeof(error_msg), NULL);
+        printf("Error message: %s\n", error_msg);
+    }
+
+    free(large_buffer);
 
     // Add a small delay before closing the connection
     printf("Waiting before closing...\n");

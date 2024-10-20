@@ -38,15 +38,20 @@ async def echo(websocket: websockets.WebSocketServerProtocol):
                 break
             print(f"Received second message: {Fore.GREEN}{second_message}{Style.RESET_ALL}")
             
+            # Send a large data response
+            large_data = "A" * 905000  # 1 million 'A' characters
+            await websocket.send(large_data)
+            print(f"Sent large data response: {Fore.YELLOW}[1 million 'A' characters]{Style.RESET_ALL}")
+            
             # Send a final response
-            final_response = "Thank you for your messages. Goodbye!"
-            await websocket.send(final_response)
-            print(f"Sent final response: {Fore.YELLOW}{final_response}{Style.RESET_ALL}")
+            # final_response = "Thank you for your messages. Goodbye!"
+            # await websocket.send(final_response)
+            # print(f"Sent final response: {Fore.YELLOW}{final_response}{Style.RESET_ALL}")
             
     except websockets.exceptions.ConnectionClosedError as e:
         # If the connection is closed unexpectedly, this exception is caught
         # We simply pass, effectively closing the connection gracefully
-        print(f"Connection closed reason: CLIENT DISCONNECTED\n\n")
+        print(f"\nConnection closed reason: CLIENT DISCONNECTED\n\n")
 
 # Define an asynchronous function named 'main' that sets up the server
 async def main():
