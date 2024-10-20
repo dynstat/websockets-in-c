@@ -5,7 +5,8 @@ import websockets
 
 # Define an asynchronous function named 'echo' that handles WebSocket connections
 # The 'async' keyword indicates that this function can be paused and resumed
-async def echo(websocket):
+async def echo(websocket: websockets.WebSocketServerProtocol):
+    print(f"New connection: with address {websocket.remote_address} and port {websocket.port}")
     try:
         # Use an asynchronous for loop to iterate over incoming messages
         # This allows the server to handle multiple connections concurrently
@@ -15,10 +16,12 @@ async def echo(websocket):
             # Send the same message back to the client
             # The 'await' keyword is used to pause execution until the send operation is complete
             await websocket.send(message)
-    except websockets.exceptions.ConnectionClosedError:
+            print(f"Sent: {message}")
+            
+    except websockets.exceptions.ConnectionClosedError as e:
         # If the connection is closed unexpectedly, this exception is caught
         # We simply pass, effectively closing the connection gracefully
-        pass
+        print(f"Connection closed reason: {e}")
 
 # Define an asynchronous function named 'main' that sets up the server
 async def main():

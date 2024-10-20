@@ -61,6 +61,8 @@ ws_state ws_get_state(ws_ctx* ctx);
 // Process WebSocket events (should be called regularly)
 int ws_service(ws_ctx* ctx);
 
+void print_hex2(const uint8_t* data, size_t length);
+
 #ifdef __cplusplus
 }
 #endif

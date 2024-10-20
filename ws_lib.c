@@ -234,15 +234,25 @@ int ws_send(ws_ctx* ctx, const char* data, size_t length, int opcode) {
         frame[header_size + i] = data[i] ^ ((uint8_t*)&mask)[i % 4];
     }
 
-    // Debug: Print frame
+    // Debug: Print frame details
     printf("Sending frame:\n");
-    print_hex(frame, frame_size);
+    printf("Opcode: 0x%02X\n", opcode);
+    printf("Mask: 0x%08X\n", mask);
+    printf("Payload length: %zu\n", length);
+    printf("Frame size: %zu\n", frame_size);
+    printf("Frame contents:\n");
+    print_hex2(frame, frame_size);
 
     // Send entire frame
     int result = send(ctx->socket, (char*)frame, frame_size, 0);
     free(frame);
 
-    return (result == frame_size) ? 0 : -1;
+    if (result != frame_size) {
+        printf("Send failed. Sent %d bytes out of %zu\n", result, frame_size);
+        return -1;
+    }
+
+    return 0;
 }
 
 int ws_recv(ws_ctx* ctx, char* buffer, size_t buffer_size) {
@@ -328,7 +338,7 @@ int ws_service(ws_ctx* ctx) {
     return 0;
 }
 
-void print_hex(const uint8_t* data, size_t length) {
+void print_hex2(const uint8_t* data, size_t length) {
     for (size_t i = 0; i < length; i++) {
         printf("%02X ", data[i]);
         if ((i + 1) % 16 == 0) printf("\n");
